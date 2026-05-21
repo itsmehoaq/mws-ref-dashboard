@@ -56,7 +56,7 @@ Use these project settings in Cloudflare Pages:
 | Build output directory | `dist` |
 | Root directory | repository root |
 
-Cloudflare's React/Vite preset uses `npm run build` and `dist`. The build toolchain packages (`typescript`, `vite`, Vite plugin, and type packages) are listed in `dependencies` so the Pages build still works if the deploy environment installs production dependencies only.
+Cloudflare's React/Vite preset uses `npm run build` and `dist`. The `prebuild` script runs `bun install` so Cloudflare's npm build command still installs from `bun.lock` before TypeScript/Vite run.
 
 ## Environment
 
