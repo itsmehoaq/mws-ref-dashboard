@@ -40,51 +40,55 @@ interface Props {
 
 export function PlayerColumn({ invA, invB, round, refName, streamer }: Props) {
   return (
-    <aside className="flex w-52 flex-shrink-0 flex-col gap-0 overflow-y-auto border-r border-border">
-      {/* Player A */}
-      <div className="space-y-2 border-b border-border p-4">
-        <div className="flex items-baseline justify-between">
-          <span className="font-heading text-sm font-semibold">{MATCH.playerA}</span>
-          <span className="font-heading text-3xl leading-none">{MATCH.scoreA}</span>
-        </div>
-        <WinBoxes score={MATCH.scoreA} needed={MATCH.winsNeeded} />
-        <IngredientBar inv={invA} />
-      </div>
-
-      <div className="flex items-center justify-center py-2">
-        <span className="font-accent text-sm text-muted-foreground">vs</span>
-      </div>
-
-      {/* Player B */}
-      <div className="space-y-2 border-b border-border p-4">
-        <div className="flex items-baseline justify-between">
-          <span className="font-heading text-sm font-semibold">{MATCH.playerB}</span>
-          <span className="font-heading text-3xl leading-none">{MATCH.scoreB}</span>
-        </div>
-        <WinBoxes score={MATCH.scoreB} needed={MATCH.winsNeeded} />
-        <IngredientBar inv={invB} />
-      </div>
-
-      {/* Match meta */}
-      <div className="space-y-1.5 p-4 text-xs text-muted-foreground">
-        <p><span className="font-medium text-foreground">Format</span> Bo{MATCH.bestOf}</p>
-        <p><span className="font-medium text-foreground">Round</span> {round}</p>
-        <p><span className="font-medium text-foreground">Ref</span> {refName}</p>
-        {streamer && <p><span className="font-medium text-foreground">Streamer</span> {streamer}</p>}
-      </div>
-
-      {/* Pool legend */}
-      <div className="border-t border-border p-4">
-        <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Ingredient key</p>
-        {INGREDIENTS.map(({ name, pool, hex }) => (
-          <div key={name} className="flex items-center gap-2 py-0.5">
-            <span className="inline-block h-2 w-2 rounded-sm flex-shrink-0" style={{ backgroundColor: hex }} />
-            <span className="text-xs text-muted-foreground">{name} = {pool} win</span>
+    <aside className="flex w-52 flex-shrink-0 flex-col border-r border-border">
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto">
+        {/* Player A */}
+        <div className="space-y-2 border-b border-border p-4">
+          <div className="flex items-baseline justify-between">
+            <span className="font-heading text-sm font-semibold">{MATCH.playerA}</span>
+            <span className="font-heading text-3xl leading-none">{MATCH.scoreA}</span>
           </div>
-        ))}
+          <WinBoxes score={MATCH.scoreA} needed={MATCH.winsNeeded} />
+          <IngredientBar inv={invA} />
+        </div>
+
+        <div className="flex items-center justify-center py-2">
+          <span className="font-accent text-sm text-muted-foreground">vs</span>
+        </div>
+
+        {/* Player B */}
+        <div className="space-y-2 border-b border-border p-4">
+          <div className="flex items-baseline justify-between">
+            <span className="font-heading text-sm font-semibold">{MATCH.playerB}</span>
+            <span className="font-heading text-3xl leading-none">{MATCH.scoreB}</span>
+          </div>
+          <WinBoxes score={MATCH.scoreB} needed={MATCH.winsNeeded} />
+          <IngredientBar inv={invB} />
+        </div>
+
+        {/* Match meta */}
+        <div className="space-y-1.5 p-4 text-xs text-muted-foreground">
+          <p><span className="font-medium text-foreground">Format</span> Bo{MATCH.bestOf}</p>
+          <p><span className="font-medium text-foreground">Round</span> {round}</p>
+          <p><span className="font-medium text-foreground">Ref</span> {refName}</p>
+          {streamer && <p><span className="font-medium text-foreground">Streamer</span> {streamer}</p>}
+        </div>
+
+        {/* Pool legend */}
+        <div className="border-t border-border p-4">
+          <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Ingredient key</p>
+          {INGREDIENTS.map(({ name, pool, hex }) => (
+            <div key={name} className="flex items-center gap-2 py-0.5">
+              <span className="inline-block h-2 w-2 rounded-sm flex-shrink-0" style={{ backgroundColor: hex }} />
+              <span className="text-xs text-muted-foreground">{name} = {pool} win</span>
+            </div>
+          ))}
+        </div>
       </div>
-      {/* Lobby manage */}
-      <div className="border-t border-border p-4 space-y-1.5">
+
+      {/* Lobby manage — pinned to bottom */}
+      <div className="flex-shrink-0 border-t border-border p-4 space-y-1.5">
         <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Lobby</p>
         <Button size="sm" variant="outline" className="w-full text-xs">Create lobby</Button>
         <Button size="sm" variant="outline" className="w-full text-xs">Join existing lobby</Button>
