@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useState } from "react"
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom"
 import { DashboardPage } from "@/components/DashboardPage"
+import { ErrorPage } from "@/components/ErrorPage"
 import { LandingPage } from "@/components/LandingPage"
 import { MatchPanel } from "@/components/match/MatchPanel"
 import type { Match } from "@/types"
 
-type View = "landing" | "dashboard" | "match"
 type AuthStatus = "loading" | "guest" | "authenticated"
-
-type SessionUser = {
-  username: string
-  osu_id: number
-}
+type SessionUser = { username: string; osu_id: number }
 
 function getAuthLoginUrl(): string {
   const configuredOrigin = import.meta.env.VITE_PAGES_DEV_ORIGIN?.trim()
@@ -27,9 +24,22 @@ function getAuthLoginUrl(): string {
   return `${origin}/api/auth/osu/login`
 }
 
+function MatchPanelRoute({ onBack }: { onBack: () => void }) {
+  const { state } = useLocation()
+  const match = (state as { match?: Match } | null)?.match
+
+  if (!match) return <Navigate to="/dashboard" replace />
+  return <MatchPanel match={match} onBack={onBack} />
+}
+
+function ErrorRoute() {
+  const { code } = useParams()
+  const navigate = useNavigate()
+  return <ErrorPage code={Number(code) || 500} onBack={() => navigate("/")} />
+}
+
 function App() {
-  const [view, setView] = useState<View>("landing")
-  const [match, setMatch] = useState<Match | null>(null)
+  const navigate = useNavigate()
   const [authStatus, setAuthStatus] = useState<AuthStatus>("loading")
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null)
 
@@ -39,6 +49,7 @@ function App() {
       if (!res.ok) {
         setSessionUser(null)
         setAuthStatus("guest")
+        if (res.status === 403) navigate("/error/403")
         return
       }
 
@@ -55,39 +66,25 @@ function App() {
       setSessionUser(null)
       setAuthStatus("guest")
     }
-  }, [])
+  }, [navigate])
+
+  useEffect(() => { void refreshSession() }, [refreshSession])
 
   useEffect(() => {
-    void refreshSession()
-  }, [refreshSession])
-
-  useEffect(() => {
-    if (authStatus === "authenticated" && view === "landing") {
-      setView("dashboard")
-    }
-    if (authStatus === "guest" && view !== "landing") {
-      setView("landing")
-      setMatch(null)
-    }
-  }, [authStatus, view])
-
-  const beginOsuLogin = useCallback(() => {
-    window.location.assign(getAuthLoginUrl())
-  }, [])
+    const path = window.location.pathname
+    if (authStatus === "authenticated" && path === "/") navigate("/dashboard")
+    if (authStatus === "guest" && path !== "/" && !path.startsWith("/error")) navigate("/")
+  }, [authStatus, navigate])
 
   const logout = useCallback(async () => {
     try {
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      })
+      await fetch("/api/auth/logout", { method: "POST", credentials: "include" })
     } finally {
       setSessionUser(null)
       setAuthStatus("guest")
-      setMatch(null)
-      setView("landing")
+      navigate("/")
     }
-  }, [])
+  }, [navigate])
 
   if (authStatus === "loading") {
     return (
@@ -97,30 +94,21 @@ function App() {
     )
   }
 
-  if (view === "landing") {
-    return <LandingPage onLogin={beginOsuLogin} />
-  }
-
-  if (view === "dashboard") {
-    return (
-      <DashboardPage
-        currentUserName={sessionUser?.username ?? "Referee"}
-        onOpenMatch={(m) => { setMatch(m); setView("match") }}
-        onLogout={() => { void logout() }}
-      />
-    )
-  }
-
-  if (view === "match" && match) {
-    return (
-      <MatchPanel
-        match={match}
-        onBack={() => { setView("dashboard"); setMatch(null) }}
-      />
-    )
-  }
-
-  return null
+  return (
+    <Routes>
+      <Route path="/" element={<LandingPage onLogin={() => window.location.assign(getAuthLoginUrl())} />} />
+      <Route path="/dashboard" element={
+        <DashboardPage
+          currentUserName={sessionUser?.username ?? "Referee"}
+          onOpenMatch={(m) => navigate(`/match/${m.id}`, { state: { match: m } })}
+          onLogout={() => { void logout() }}
+        />
+      } />
+      <Route path="/match/:matchId" element={<MatchPanelRoute onBack={() => navigate("/dashboard")} />} />
+      <Route path="/error/:code" element={<ErrorRoute />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
 }
 
 export default App
