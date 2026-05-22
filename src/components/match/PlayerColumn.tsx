@@ -1,6 +1,12 @@
+import { useState } from "react"
+import { Check, Pencil } from "lucide-react"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { INGREDIENTS } from "@/data/constants"
-import type { Inventory } from "@/types"
+import type { IngKey, Inventory } from "@/types"
 
 function WinBoxes({ score, needed }: { score: number; needed: number }) {
   return (
@@ -15,19 +21,46 @@ function WinBoxes({ score, needed }: { score: number; needed: number }) {
   )
 }
 
-function IngredientBar({ inv }: { inv: Inventory }) {
+function IngredientBar({ inv, editing, onChange, onToggleEdit }: { inv: Inventory; editing?: boolean; onChange?: (key: IngKey, delta: number) => void; onToggleEdit?: () => void }) {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
-      {INGREDIENTS.map(({ key, name, hex }) => (
-        <div key={key} className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: hex }} />
-          <span className="text-xs text-muted-foreground">{name}</span>
-          <span className="text-xs font-semibold tabular-nums" style={{ color: hex }}>×{inv[key]}</span>
-        </div>
-      ))}
+    <div className="mt-2 rounded-md border border-border/60 bg-muted/30 px-2.5 py-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Ingredients</span>
+        <button
+          className="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={onToggleEdit}
+        >
+          {editing ? <><Check className="h-2.5 w-2.5" /> Done</> : <><Pencil className="h-2.5 w-2.5" /> Edit</>}
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-x-2 gap-y-1">
+        {INGREDIENTS.map(({ key, name, hex }) => (
+          <div key={key} className="flex items-center gap-0.5">
+            <span className="inline-block h-2 w-2 flex-shrink-0 rounded-full" style={{ backgroundColor: hex }} />
+            <span className="text-xs text-muted-foreground">{name}</span>
+            {editing ? (
+              <div className="ml-0.5 flex items-center gap-0.5">
+                <button
+                  className="flex h-4 w-4 items-center justify-center rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => onChange?.(key, -1)}
+                >−</button>
+                <span className="w-4 text-center text-xs font-semibold tabular-nums" style={{ color: hex }}>{inv[key] ?? 0}</span>
+                <button
+                  className="flex h-4 w-4 items-center justify-center rounded text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => onChange?.(key, +1)}
+                >+</button>
+              </div>
+            ) : (
+              <span className="ml-0.5 text-xs font-semibold tabular-nums" style={{ color: hex }}>×{inv[key] ?? 0}</span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
+
+type LobbyConfirm = "create" | "close" | "result"
 
 interface Props {
   playerA: string
@@ -37,13 +70,51 @@ interface Props {
   bestOf: number
   invA: Inventory
   invB: Inventory
+  invLoading?: boolean
   round: string
   refName: string
   streamer?: string
+  onInvAChange?: (key: IngKey, delta: number) => void
+  onInvBChange?: (key: IngKey, delta: number) => void
+  onCreateLobby?: () => void
+  onJoinLobby?: (mpId: string) => void
+  onCloseLobby?: () => void
+  onPostResult?: () => void
 }
 
-export function PlayerColumn({ playerA, playerB, scoreA, scoreB, bestOf, invA, invB, round, refName, streamer }: Props) {
+const LOBBY_CONFIRM_CONFIG: Record<LobbyConfirm, { title: string; description: string; actionLabel: string; destructive?: boolean }> = {
+  create:  { title: "Create lobby",        description: "This will create a new osu! multiplayer lobby for this match.",                                actionLabel: "Create"      },
+  close:   { title: "Close lobby",         description: "This will close the osu! lobby. This action cannot be undone.",                                actionLabel: "Close lobby", destructive: true },
+  result:  { title: "Post match result",   description: "This will post the final match result to the tournament sheet. Make sure scores are correct.", actionLabel: "Post result" },
+}
+
+export function PlayerColumn({
+  playerA, playerB, scoreA, scoreB, bestOf,
+  invA, invB, invLoading,
+  round, refName, streamer,
+  onInvAChange, onInvBChange,
+  onCreateLobby, onJoinLobby, onCloseLobby, onPostResult,
+}: Props) {
   const winsNeeded = Math.ceil(bestOf / 2)
+  const [editingPlayer, setEditingPlayer] = useState<"a" | "b" | null>(null)
+  const [confirmAction, setConfirmAction] = useState<LobbyConfirm | null>(null)
+  const [joinOpen, setJoinOpen] = useState(false)
+  const [mpIdInput, setMpIdInput] = useState("")
+
+  function handleJoinConfirm() {
+    const cleaned = mpIdInput.trim().replace(/^#?mp_?/i, "")
+    if (cleaned) onJoinLobby?.(cleaned)
+    setJoinOpen(false)
+    setMpIdInput("")
+  }
+
+  function handleConfirmAction() {
+    if (confirmAction === "create") onCreateLobby?.()
+    if (confirmAction === "close")  onCloseLobby?.()
+    if (confirmAction === "result") onPostResult?.()
+    setConfirmAction(null)
+  }
+
   return (
     <aside className="flex w-52 flex-shrink-0 flex-col border-r border-border">
       {/* Scrollable content */}
@@ -52,10 +123,13 @@ export function PlayerColumn({ playerA, playerB, scoreA, scoreB, bestOf, invA, i
         <div className="space-y-2 border-b border-border p-4">
           <div className="flex items-baseline justify-between">
             <span className="font-heading text-sm font-semibold">{playerA}</span>
-            <span className="font-heading text-3xl leading-none">{scoreA}</span>
+            {invLoading ? <Skeleton className="h-7 w-8" /> : <span className="font-heading text-3xl leading-none">{scoreA}</span>}
           </div>
-          <WinBoxes score={scoreA} needed={winsNeeded} />
-          <IngredientBar inv={invA} />
+          {invLoading ? <Skeleton className="h-3 w-28" /> : <WinBoxes score={scoreA} needed={winsNeeded} />}
+          {invLoading
+            ? <Skeleton className="h-14 w-full mt-2" />
+            : <IngredientBar inv={invA} editing={editingPlayer === "a"} onChange={onInvAChange} onToggleEdit={() => setEditingPlayer(editingPlayer === "a" ? null : "a")} />
+          }
         </div>
 
         <div className="flex items-center justify-center py-2">
@@ -66,10 +140,13 @@ export function PlayerColumn({ playerA, playerB, scoreA, scoreB, bestOf, invA, i
         <div className="space-y-2 border-b border-border p-4">
           <div className="flex items-baseline justify-between">
             <span className="font-heading text-sm font-semibold">{playerB}</span>
-            <span className="font-heading text-3xl leading-none">{scoreB}</span>
+            {invLoading ? <Skeleton className="h-7 w-8" /> : <span className="font-heading text-3xl leading-none">{scoreB}</span>}
           </div>
-          <WinBoxes score={scoreB} needed={winsNeeded} />
-          <IngredientBar inv={invB} />
+          {invLoading ? <Skeleton className="h-3 w-28" /> : <WinBoxes score={scoreB} needed={winsNeeded} />}
+          {invLoading
+            ? <Skeleton className="h-14 w-full mt-2" />
+            : <IngredientBar inv={invB} editing={editingPlayer === "b"} onChange={onInvBChange} onToggleEdit={() => setEditingPlayer(editingPlayer === "b" ? null : "b")} />
+          }
         </div>
 
         {/* Match meta */}
@@ -85,7 +162,7 @@ export function PlayerColumn({ playerA, playerB, scoreA, scoreB, bestOf, invA, i
           <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Ingredient key</p>
           {INGREDIENTS.map(({ name, pool, hex }) => (
             <div key={name} className="flex items-center gap-2 py-0.5">
-              <span className="inline-block h-2 w-2 rounded-sm flex-shrink-0" style={{ backgroundColor: hex }} />
+              <span className="inline-block h-2 w-2 flex-shrink-0 rounded-sm" style={{ backgroundColor: hex }} />
               <span className="text-xs text-muted-foreground">{name} = {pool} win</span>
             </div>
           ))}
@@ -93,13 +170,53 @@ export function PlayerColumn({ playerA, playerB, scoreA, scoreB, bestOf, invA, i
       </div>
 
       {/* Lobby manage — pinned to bottom */}
-      <div className="flex-shrink-0 border-t border-border p-4 space-y-1.5">
+      <div className="flex-shrink-0 space-y-1.5 border-t border-border p-4">
         <p className="mb-2 text-xs uppercase tracking-[0.16em] text-muted-foreground">Lobby</p>
-        <Button size="sm" variant="outline" className="w-full text-xs">Create lobby</Button>
-        <Button size="sm" variant="outline" className="w-full text-xs">Join existing lobby</Button>
-        <Button size="sm" variant="outline" className="w-full text-xs">Post match result</Button>
-        <Button size="sm" variant="destructive" className="w-full text-xs">Close lobby</Button>
+        <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setConfirmAction("create")}>Create lobby</Button>
+        <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setJoinOpen(true)}>Join existing lobby</Button>
+        <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => setConfirmAction("result")}>Post match result</Button>
+        <Button size="sm" variant="destructive" className="w-full text-xs" onClick={() => setConfirmAction("close")}>Close lobby</Button>
       </div>
+
+      {/* Confirmation dialogs */}
+      <AlertDialog open={confirmAction !== null} onOpenChange={(open) => { if (!open) setConfirmAction(null) }}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmAction ? LOBBY_CONFIRM_CONFIG[confirmAction].title : ""}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmAction ? LOBBY_CONFIRM_CONFIG[confirmAction].description : ""}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel size="sm">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              size="sm"
+              variant={confirmAction === "close" ? "destructive" : "default"}
+              onClick={handleConfirmAction}
+            >
+              {confirmAction ? LOBBY_CONFIRM_CONFIG[confirmAction].actionLabel : ""}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Join lobby dialog */}
+      <Dialog open={joinOpen} onOpenChange={(open) => { if (!open) { setJoinOpen(false); setMpIdInput("") } }}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Join existing lobby</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="#mp_12345678"
+            value={mpIdInput}
+            onChange={(e) => setMpIdInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleJoinConfirm() }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button size="sm" variant="outline" onClick={() => { setJoinOpen(false); setMpIdInput("") }}>Cancel</Button>
+            <Button size="sm" disabled={!mpIdInput.trim()} onClick={handleJoinConfirm}>Join</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </aside>
   )
 }

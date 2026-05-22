@@ -16,8 +16,14 @@ export function hexToRgb(hex: string): [number, number, number] {
   ]
 }
 
+export function poolConfig(pool: string) {
+  return POOL_CONFIG[pool.toUpperCase() as keyof typeof POOL_CONFIG] ?? null
+}
+
 export function rowStyle(map: PoolMap): CSSProperties {
-  const { hex } = POOL_CONFIG[map.pool]
+  const config = poolConfig(map.pool)
+  if (!config) return { backgroundColor: "transparent", borderLeft: "3px solid rgba(99,72,50,0.14)" }
+  const { hex } = config
   const [r, g, b] = hexToRgb(hex)
 
   if (map.status === "banned") {

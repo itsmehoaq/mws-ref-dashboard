@@ -1,4 +1,4 @@
-export type Pool = "NM" | "HD" | "HR" | "DT" | "FM" | "TB"
+export type Pool = "NM" | "HD" | "HR" | "DT" | "FM" | "TB" | "PS"
 export type MapStatus = "available" | "picked" | "banned" | "in-progress" | "completed"
 export type MatchStatus = "scheduled" | "upcoming" | "live" | "completed" | "forfeit"
 export type IngKey = "egg" | "sugar" | "butter" | "flour" | "milk"

@@ -6,7 +6,8 @@ export const CURRENT_ROUND      = "Round of 16"
 export const MOCK_USER          = { name: "RefA" }
 
 export const POOL_CONFIG: Record<Pool, { hex: string; ing: IngKey | null; label: string }> = {
-  NM: { hex: "#957259", ing: "egg",    label: "NM" },
+  NM: { hex: "#89bfd4", ing: "egg",    label: "NM" },
+  PS: { hex: "#957259", ing: null,     label: "PS" },
   HD: { hex: "#b89600", ing: "sugar",  label: "HD" },
   HR: { hex: "#8d3f38", ing: "butter", label: "HR" },
   DT: { hex: "#4e6a7a", ing: "flour",  label: "DT" },

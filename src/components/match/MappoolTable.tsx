@@ -1,7 +1,6 @@
 import { Badge } from "@/components/ui/badge"
-import { POOL_CONFIG } from "@/data/constants"
-import { MAPPOOL } from "@/data/mock"
-import { rowStyle } from "@/lib/mappool"
+import { Skeleton } from "@/components/ui/skeleton"
+import { poolConfig, rowStyle } from "@/lib/mappool"
 import type { PoolMap } from "@/types"
 
 function statusBadge(map: PoolMap): React.ReactNode {
@@ -12,15 +11,29 @@ function statusBadge(map: PoolMap): React.ReactNode {
   return null
 }
 
+function SkeletonRows() {
+  return (
+    <>
+      {Array.from({ length: 12 }).map((_, i) => (
+        <tr key={i} className="border-b border-border/40">
+          <td className="px-3 py-2.5"><Skeleton className="h-3 w-8" /></td>
+          <td className="px-3 py-2.5"><Skeleton className="h-3" style={{ width: `${45 + (i % 5) * 10}%` }} /></td>
+          <td className="px-3 py-2.5"><Skeleton className="h-3 w-16" /></td>
+        </tr>
+      ))}
+    </>
+  )
+}
+
 interface Props {
   mappool?: PoolMap[]
   onRowClick?: (map: PoolMap) => void
 }
 
-export function MappoolTable({ mappool: liveMaps, onRowClick }: Props) {
-  const maps = liveMaps ?? MAPPOOL
-  const played = maps.filter((m) => m.status === "completed").length
-  const banned = maps.filter((m) => m.status === "banned").length
+export function MappoolTable({ mappool, onRowClick }: Props) {
+  const loading = mappool === undefined
+  const played  = mappool?.filter((m) => m.status === "completed").length ?? 0
+  const banned  = mappool?.filter((m) => m.status === "banned").length ?? 0
 
   return (
     <main className="flex h-full flex-col overflow-hidden">
@@ -29,7 +42,7 @@ export function MappoolTable({ mappool: liveMaps, onRowClick }: Props) {
         <span className="font-heading text-xs uppercase tracking-[0.16em] text-muted-foreground">Mappool</span>
         <Badge variant="outline" className="text-xs">Picks / Bans</Badge>
         <span className="ml-auto text-xs text-muted-foreground">
-          {played} played · {banned} banned
+          {loading ? "Loading…" : `${played} played · ${banned} banned`}
         </span>
       </div>
 
@@ -44,7 +57,7 @@ export function MappoolTable({ mappool: liveMaps, onRowClick }: Props) {
             </tr>
           </thead>
           <tbody>
-            {maps.map((map) => (
+            {loading ? <SkeletonRows /> : mappool.map((map) => (
               <tr
                 key={map.slot}
                 style={rowStyle(map)}
@@ -54,7 +67,7 @@ export function MappoolTable({ mappool: liveMaps, onRowClick }: Props) {
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onRowClick?.(map) }}
               >
                 <td className="px-3 py-2.5">
-                  <span className="font-heading text-sm font-bold" style={{ color: POOL_CONFIG[map.pool].hex }}>
+                  <span className="font-heading text-sm font-bold" style={{ color: (poolConfig(map.pool) ?? poolConfig("NM"))?.hex ?? "#957259" }}>
                     {map.slot}
                   </span>
                 </td>

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { TOURNAMENT_NAME, TOURNAMENT_SUBTITLE } from "@/data/constants"
 import { isTerminalMatchStatus, statusVariant } from "@/lib/mappool"
 import type { Match } from "@/types"
@@ -31,6 +32,42 @@ function EmptyState({ message }: { message: string }) {
     <div className="rounded-lg border border-dashed border-border bg-card/30 px-4 py-6 text-sm text-muted-foreground">
       {message}
     </div>
+  )
+}
+
+function SkeletonCards() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <Card key={i}>
+          <CardHeader className="pb-3 space-y-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3 w-28" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-8 w-full" />
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
+function SkeletonTableRows() {
+  return (
+    <>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <tr key={i} className="border-b border-border/60">
+          <td className="px-4 py-3"><Skeleton className="h-3 w-20" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-3 w-12" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-3 w-36" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-3 w-16" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-3 w-12" /></td>
+          <td className="px-4 py-3"><Skeleton className="h-4 w-14 rounded-full" /></td>
+          <td className="px-4 py-3" />
+        </tr>
+      ))}
+    </>
   )
 }
 
@@ -102,15 +139,15 @@ export function DashboardPage({ currentUserName, onOpenMatch, onLogout }: Props)
 
         <section className="space-y-3">
           <h2 className="font-heading text-xl">Your matches</h2>
-          {yourMatches.length > 0 ? (
+          {!matchesResponse ? <SkeletonCards /> : yourMatches.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {yourMatches.map((m) => (
                 <Card key={m.id} className="border-primary/30">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <CardTitle className="font-heading text-lg">{m.playerA} vs {m.playerB}</CardTitle>
-                        <CardDescription>{m.round} · {m.date} · {m.time}</CardDescription>
+                        <p className="font-heading text-lg font-semibold">{m.playerA} vs {m.playerB}</p>
+                        <p className="text-sm text-muted-foreground">{m.round} · {m.date} · {m.time}</p>
                       </div>
                       <Badge variant={statusVariant(m.status)} className="capitalize">{m.status}</Badge>
                     </div>
@@ -124,21 +161,21 @@ export function DashboardPage({ currentUserName, onOpenMatch, onLogout }: Props)
               ))}
             </div>
           ) : (
-            <EmptyState message={matchesResponse ? "No matches assigned to you." : "Loading your matches..."} />
+            <EmptyState message="No matches assigned to you." />
           )}
         </section>
 
         <section className="space-y-3">
           <h2 className="font-heading text-xl">Active matches</h2>
-          {activeMatches.length > 0 ? (
+          {!matchesResponse ? <SkeletonCards /> : activeMatches.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {activeMatches.map((m) => (
                 <Card key={m.id} className="border-primary/40">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <CardTitle className="font-heading text-lg">{m.playerA} vs {m.playerB}</CardTitle>
-                        <CardDescription>{m.round} · {m.date} · {m.time}</CardDescription>
+                        <p className="font-heading text-lg font-semibold">{m.playerA} vs {m.playerB}</p>
+                        <p className="text-sm text-muted-foreground">{m.round} · {m.date} · {m.time}</p>
                       </div>
                       <Badge variant={statusVariant(m.status)}>Live</Badge>
                     </div>
@@ -152,7 +189,7 @@ export function DashboardPage({ currentUserName, onOpenMatch, onLogout }: Props)
               ))}
             </div>
           ) : (
-            <EmptyState message={matchesResponse ? "No active matches right now." : "Loading active matches..."} />
+            <EmptyState message="No active matches right now." />
           )}
         </section>
 
@@ -170,7 +207,7 @@ export function DashboardPage({ currentUserName, onOpenMatch, onLogout }: Props)
                 </tr>
               </thead>
               <tbody>
-                {scheduleMatches.length > 0 ? (
+                {!matchesResponse ? <SkeletonTableRows /> : scheduleMatches.length > 0 ? (
                   scheduleMatches.map((m, i) => (
                     <tr key={m.id} className={`border-b border-border/60 last:border-0 ${i % 2 === 0 ? "bg-background/40" : ""}`}>
                       <td className="px-4 py-3 text-muted-foreground">{m.round}</td>
@@ -190,9 +227,7 @@ export function DashboardPage({ currentUserName, onOpenMatch, onLogout }: Props)
                   ))
                 ) : (
                   <tr>
-                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={7}>
-                      {matchesResponse ? "No scheduled matches found." : "Loading tournament schedule..."}
-                    </td>
+                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={7}>No scheduled matches found.</td>
                   </tr>
                 )}
               </tbody>

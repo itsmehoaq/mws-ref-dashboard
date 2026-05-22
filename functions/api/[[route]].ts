@@ -879,7 +879,7 @@ app.get("/api/match/:matchId/mappool", async (c) => {
       const ov   = overrides.get(slot)
       return {
         slot,
-        pool:     r["mod_pool"]?.trim() ?? "",
+        pool:     r["mod_pool"]?.trim().toUpperCase() ?? "",
         map:      r["title"]?.trim() ?? "",
         status:   ov?.["status"]?.trim() || "available",
         pickedBy: ov?.["picked_by"]?.trim() || undefined,

@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { AUDIT_LOG, INVENTORY_A, INVENTORY_B } from "@/data/mock"
-import type { Inventory, Match, PoolMap } from "@/types"
+import type { IngKey, Inventory, Match, PoolMap } from "@/types"
 import { IrcChat } from "./IrcChat"
 import { MapActionModal } from "./MapActionModal"
 import { MappoolTable } from "./MappoolTable"
@@ -94,15 +94,23 @@ export function MatchPanel({ match, onBack }: Props) {
           scoreA={liveScoreA}
           scoreB={liveScoreB}
           bestOf={match.bestOf ?? 9}
+          invLoading={liveInventory === null}
           invA={liveInventory?.a ?? INVENTORY_A}
           invB={liveInventory?.b ?? INVENTORY_B}
           round={match.round}
           refName={match.referee ?? "—"}
           streamer={match.streamer}
+          onInvAChange={(key: IngKey, delta: number) => setLiveInventory((prev) => prev ? { ...prev, a: { ...prev.a, [key]: Math.max(0, (prev.a[key] ?? 0) + delta) } } : prev)}
+          onInvBChange={(key: IngKey, delta: number) => setLiveInventory((prev) => prev ? { ...prev, b: { ...prev.b, [key]: Math.max(0, (prev.b[key] ?? 0) + delta) } } : prev)}
+          onCreateLobby={() => console.log("create lobby")}
+          onJoinLobby={(mpId) => console.log("join lobby", mpId)}
+          onCloseLobby={() => console.log("close lobby")}
+          onPostResult={() => console.log("post result")}
         />
 
         <div style={{ width: poolWidth, flexShrink: 0 }} className="flex flex-col overflow-hidden">
           <MappoolTable mappool={liveMappool ?? undefined} onRowClick={setSelectedMap} />
+
         </div>
 
         {/* Resize handle */}
