@@ -8,6 +8,7 @@ export interface PoolMap {
   slot: string
   pool: Pool
   map: string
+  beatmapId?: string
   bpm: number
   ar: number
   cs: number

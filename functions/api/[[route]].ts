@@ -67,6 +67,7 @@ type ApiPoolMap = {
   slot: string
   pool: string
   map: string
+  beatmapId?: string
   status: string
   pickedBy?: string
   bannedBy?: string
@@ -737,16 +738,37 @@ async function appendAuditLog(
 }
 
 async function updateMatchField(env: Bindings, matchId: string, fieldName: string, value: string): Promise<void> {
+  await updateMatchFields(env, matchId, { [fieldName]: value })
+}
+
+async function updateMatchFields(env: Bindings, matchId: string, fields: Record<string, string>): Promise<void> {
+  const sheetId = mustEnv(env, "GOOGLE_SHEETS_TOURNAMENT_ID")
   const values = await getSheetValues(env, "matches!A1:Z")
   const [headers, ...rows] = values
   if (!headers) return
-  const colIdx = headers.findIndex((h) => h.trim().toLowerCase().replace(/[\s-]/g, "_") === fieldName)
-  if (colIdx < 0) throw new Error(`Column "${fieldName}" not found in matches sheet`)
+  const normalizedHeaders = headers.map((h) => h.trim().toLowerCase().replace(/[\s-]/g, "_"))
   const rowIdx = rows.findIndex((r) => r[0]?.trim() === matchId)
   if (rowIdx < 0) throw new Error(`Match "${matchId}" not found in matches sheet`)
-  const colLetter = String.fromCharCode(65 + colIdx)
   const rowNum = rowIdx + 2
-  await writeSheetCell(env, `matches!${colLetter}${rowNum}`, value)
+
+  const data: { range: string; values: string[][] }[] = []
+  for (const [fieldName, value] of Object.entries(fields)) {
+    const colIdx = normalizedHeaders.indexOf(fieldName)
+    if (colIdx < 0) throw new Error(`Column "${fieldName}" not found in matches sheet`)
+    data.push({ range: `matches!${colLetter(colIdx)}${rowNum}`, values: [[value]] })
+  }
+
+  const accessToken = await getGoogleAccessToken(env)
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values:batchUpdate`
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ valueInputOption: "RAW", data }),
+  })
+  if (!res.ok) {
+    const reason = await res.text()
+    throw new Error(`Sheets batch write failed: ${res.status} ${reason}`)
+  }
 }
 
 app.use("/api/*", async (c, next) => {
@@ -1021,14 +1043,16 @@ app.get("/api/match/:matchId/mappool", async (c) => {
     const mappool: ApiPoolMap[] = roundMaps.map((r) => {
       const slot = r["map_id"]?.trim() ?? ""
       const ov   = overrides.get(slot)
+      const beatmapId = r["beatmap_id"]?.trim() || undefined
       return {
         slot,
-        pool:     r["mod_pool"]?.trim().toUpperCase() ?? "",
-        map:      r["title"]?.trim() ?? "",
-        status:   ov?.["status"]?.trim() || "available",
-        pickedBy: ov?.["picked_by"]?.trim() || undefined,
-        bannedBy: ov?.["banned_by"]?.trim() || undefined,
-        winner:   ov?.["winner"]?.trim() || undefined,
+        pool:      r["mod_pool"]?.trim().toUpperCase() ?? "",
+        map:       r["title"]?.trim() ?? "",
+        beatmapId,
+        status:    ov?.["status"]?.trim() || "available",
+        pickedBy:  ov?.["picked_by"]?.trim() || undefined,
+        bannedBy:  ov?.["banned_by"]?.trim() || undefined,
+        winner:    ov?.["winner"]?.trim() || undefined,
       }
     })
 
@@ -1570,6 +1594,43 @@ app.post("/api/match/:matchId/action", async (c) => {
     return c.json({ ok: true, slot, action, player, status })
   } catch (error) {
     return c.json({ error: error instanceof Error ? error.message : "Action failed" }, 500)
+  }
+})
+
+app.post("/api/match/:matchId/forfeit", async (c) => {
+  const matchId = c.req.param("matchId")
+  const sessionUser = await readSessionUser(c)
+
+  let body: { winner?: string; playerA?: string; playerB?: string }
+  try { body = await c.req.json() } catch { return c.json({ error: "Invalid JSON" }, 400) }
+
+  const { winner, playerA, playerB } = body
+  if (!winner || !playerA || !playerB) {
+    return c.json({ error: "winner, playerA, playerB required" }, 400)
+  }
+
+  const loserIsA = winner === playerB
+  const fields: Record<string, string> = {
+    status: "forfeit",
+    winner,
+    score_a: loserIsA ? "-1" : "0",
+    score_b: loserIsA ? "0" : "-1",
+  }
+
+  try {
+    await updateMatchFields(c.env, matchId, fields)
+    await appendAuditLog(
+      c.env,
+      sessionUser?.username ?? "unknown",
+      "forfeit",
+      "match",
+      matchId,
+      "{}",
+      JSON.stringify({ winner, loser: loserIsA ? playerA : playerB }),
+    ).catch(() => {})
+    return c.json({ ok: true, winner, loser: loserIsA ? playerA : playerB })
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "Forfeit failed" }, 500)
   }
 })
 

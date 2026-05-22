@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { INGREDIENTS } from "@/data/constants"
-import type { IngKey, Inventory } from "@/types"
+import type { IngKey, Inventory, MatchStatus } from "@/types"
 
 function WinBoxes({ score, needed }: { score: number; needed: number }) {
   return (
@@ -81,6 +81,8 @@ interface Props {
   onCloseLobby?: () => void
   onPostResult?: () => void
   onSendReminder?: () => void
+  onForfeit?: (winner: string) => void
+  matchStatus?: MatchStatus
   hasLobby?: boolean
   isDemo?: boolean
 }
@@ -97,14 +99,16 @@ export function PlayerColumn({
   invA, invB, invLoading,
   round, refName, streamer,
   onInvAChange, onInvBChange,
-  onCreateLobby, onJoinLobby, onCloseLobby, onPostResult, onSendReminder,
-  hasLobby = false, isDemo = false,
+  onCreateLobby, onJoinLobby, onCloseLobby, onPostResult, onSendReminder, onForfeit,
+  matchStatus, hasLobby = false, isDemo = false,
 }: Props) {
   const winsNeeded = Math.ceil(bestOf / 2)
+  const isFinished = matchStatus === "completed" || matchStatus === "forfeit"
   const [editingPlayer, setEditingPlayer] = useState<"a" | "b" | null>(null)
   const [confirmAction, setConfirmAction] = useState<LobbyConfirm | null>(null)
   const [joinOpen, setJoinOpen] = useState(false)
   const [mpIdInput, setMpIdInput] = useState("")
+  const [forfeitOpen, setForfeitOpen] = useState(false)
 
   function handleJoinConfirm() {
     const cleaned = mpIdInput.trim().replace(/^#?mp_?/i, "")
@@ -184,7 +188,8 @@ export function PlayerColumn({
         <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || hasLobby} onClick={() => setConfirmAction("create")}>Create lobby</Button>
         <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || hasLobby} onClick={() => setJoinOpen(true)}>Join existing lobby</Button>
         <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || hasLobby} onClick={() => setConfirmAction("reminder")}>Match reminder</Button>
-        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo} onClick={() => setConfirmAction("result")}>Post match result</Button>
+        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || !isFinished} onClick={() => setConfirmAction("result")}>Post match result</Button>
+        <Button size="sm" variant="outline" className="w-full text-xs border-destructive/40 text-destructive/80 hover:border-destructive hover:text-destructive hover:bg-destructive/5" disabled={isDemo || isFinished} onClick={() => setForfeitOpen(true)}>Set forfeit</Button>
         <Button size="sm" variant="destructive" className="w-full text-xs" disabled={isDemo || !hasLobby} onClick={() => setConfirmAction("close")}>Close lobby</Button>
       </div>
 
@@ -224,6 +229,37 @@ export function PlayerColumn({
           <DialogFooter>
             <Button size="sm" variant="outline" onClick={() => { setJoinOpen(false); setMpIdInput("") }}>Cancel</Button>
             <Button size="sm" disabled={!mpIdInput.trim()} onClick={handleJoinConfirm}>Join</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Forfeit dialog */}
+      <Dialog open={forfeitOpen} onOpenChange={setForfeitOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Set forfeit — who wins?</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">The other player will receive a score of −1. Match status will be set to forfeit.</p>
+          <div className="flex gap-2 pt-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-xs"
+              onClick={() => { onForfeit?.(playerA); setForfeitOpen(false) }}
+            >
+              {playerA} wins
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="flex-1 text-xs"
+              onClick={() => { onForfeit?.(playerB); setForfeitOpen(false) }}
+            >
+              {playerB} wins
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button size="sm" variant="ghost" className="w-full text-xs text-muted-foreground" onClick={() => setForfeitOpen(false)}>Cancel</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

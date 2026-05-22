@@ -73,7 +73,9 @@ export function MatchPanel({ match, onBack, isDemo = false }: Props) {
   const [liveInventory, setLiveInventory] = useState<{ a: Inventory; b: Inventory } | null>(null)
   const [liveScoreA, setLiveScoreA] = useState<number>(match.scoreA ?? 0)
   const [liveScoreB, setLiveScoreB] = useState<number>(match.scoreB ?? 0)
+  const [liveMatchStatus, setLiveMatchStatus] = useState(match.status)
   const [matchRules, setMatchRules] = useState<Record<string, string>>({})
+  const [enforceNF, setEnforceNF] = useState(false)
   const [rulesOpen, setRulesOpen] = useState(false)
   const [liveLobbyUrl, setLiveLobbyUrl] = useState<string | undefined>(undefined)
   const [liveEvents, setLiveEvents] = useState<MatchEvent[]>([])
@@ -105,8 +107,9 @@ export function MatchPanel({ match, onBack, isDemo = false }: Props) {
         setLiveInventory(data)
       }
       if (cfgRes.ok) {
-        const cfg = await cfgRes.json() as { rules?: Record<string, string> }
+        const cfg = await cfgRes.json() as { rules?: Record<string, string>; enforceNF?: boolean }
         if (cfg.rules) setMatchRules(cfg.rules)
+        if (typeof cfg.enforceNF === "boolean") setEnforceNF(cfg.enforceNF)
       }
     }
     void load()
@@ -119,6 +122,21 @@ export function MatchPanel({ match, onBack, isDemo = false }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channel, message }),
     })
+  }
+
+  function getPickMods(pool: string, nf: boolean): string {
+    const p = pool.toUpperCase()
+    if (p === "FM" || p === "TB") return "Freemod"
+    if (p === "HD") return nf ? "HDNF" : "HD"
+    if (p === "HR") return nf ? "HRNF" : "HR"
+    if (p === "DT") return nf ? "DTNF" : "DT"
+    return nf ? "NF" : "None"
+  }
+
+  async function sendPickSequence(map: PoolMap, channel: string) {
+    if (map.beatmapId) await sendIrc(channel, `!mp map ${map.beatmapId} 0`)
+    await sendIrc(channel, `!mp mods ${getPickMods(map.pool, enforceNF)}`)
+    await sendIrc(channel, "!mp timer 120")
   }
 
   async function createLobby() {
@@ -265,6 +283,20 @@ export function MatchPanel({ match, onBack, isDemo = false }: Props) {
           onCloseLobby={() => void closeLobby()}
           onPostResult={() => console.log("post result")}
           onSendReminder={() => void fetch(`/api/match/${match.id}/remind`, { method: "POST", credentials: "include" })}
+          onForfeit={(winner) => {
+            void fetch(`/api/match/${match.id}/forfeit`, {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ winner, playerA: match.playerA, playerB: match.playerB }),
+            }).then(async (res) => {
+              if (!res.ok) { console.error("forfeit failed", await res.text()); return }
+              setLiveMatchStatus("forfeit")
+              if (winner === match.playerA) setLiveScoreB(-1)
+              else setLiveScoreA(-1)
+            })
+          }}
+          matchStatus={liveMatchStatus}
           hasLobby={liveLobbyUrl !== undefined}
           isDemo={isDemo}
         />
@@ -372,6 +404,11 @@ export function MatchPanel({ match, onBack, isDemo = false }: Props) {
               console.error("action failed", await res.text())
             }
           })
+
+          if (action === "pick") {
+            const channel = lobbyUrlToChannel(liveLobbyUrl)
+            if (channel) void sendPickSequence(map, channel)
+          }
         }}
       />
     </div>
