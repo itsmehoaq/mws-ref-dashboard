@@ -96,6 +96,37 @@ function mustEnv(env: Bindings, key: keyof Bindings): string {
   return value
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null
+  }
+  return value as Record<string, unknown>
+}
+
+function toStringMatrix(value: unknown): string[][] | null {
+  if (!Array.isArray(value)) {
+    return null
+  }
+
+  const rows: string[][] = []
+  for (const row of value) {
+    if (!Array.isArray(row)) {
+      return null
+    }
+
+    rows.push(
+      row.map((cell) => {
+        if (typeof cell === "string") {
+          return cell
+        }
+        return cell == null ? "" : String(cell)
+      })
+    )
+  }
+
+  return rows
+}
+
 async function getServiceAccountCredentials(env: Bindings): Promise<{ email: string; privateKey: string }> {
   const rawJson = mustEnv(env, "GOOGLE_APPLICATION_CREDENTIALS")
   if (!rawJson.trimStart().startsWith("{")) {
@@ -218,12 +249,16 @@ async function getGoogleAccessToken(env: Bindings): Promise<string> {
     throw new Error(`Google OAuth token request failed: ${tokenRes.status} ${reason}`)
   }
 
-  const tokenJson = await tokenRes.json<{ access_token?: string }>()
-  if (!tokenJson.access_token) {
+  const tokenJson = toRecord(await tokenRes.json())
+  const accessToken = tokenJson && typeof tokenJson.access_token === "string"
+    ? tokenJson.access_token
+    : null
+
+  if (!accessToken) {
     throw new Error("Google OAuth token response missing access_token")
   }
 
-  return tokenJson.access_token
+  return accessToken
 }
 
 async function getSheetValuesSafe(env: Bindings, rangeA1: string): Promise<string[][]> {
@@ -252,8 +287,13 @@ async function getSheetValues(env: Bindings, rangeA1: string): Promise<string[][
     throw new Error(`Sheets read failed: ${res.status} ${reason}`)
   }
 
-  const payload = await res.json<{ values?: string[][] }>()
-  return payload.values ?? []
+  const payload = toRecord(await res.json())
+  if (!payload) {
+    throw new Error("Sheets read failed: invalid JSON payload")
+  }
+
+  const values = toStringMatrix(payload.values)
+  return values ?? []
 }
 
 async function getAccessRows(env: Bindings): Promise<string[][]> {
@@ -492,12 +532,16 @@ async function exchangeOsuCodeForToken(
     throw new Error(`osu! token exchange failed: ${tokenRes.status} ${reason}`)
   }
 
-  const tokenJson = await tokenRes.json<{ access_token?: string }>()
-  if (!tokenJson.access_token) {
+  const tokenJson = toRecord(await tokenRes.json())
+  const accessToken = tokenJson && typeof tokenJson.access_token === "string"
+    ? tokenJson.access_token
+    : null
+
+  if (!accessToken) {
     throw new Error("osu! token response missing access_token")
   }
 
-  return tokenJson.access_token
+  return accessToken
 }
 
 async function fetchOsuUser(accessToken: string, env: Bindings): Promise<OsuUser> {
@@ -513,7 +557,11 @@ async function fetchOsuUser(accessToken: string, env: Bindings): Promise<OsuUser
     throw new Error(`osu! user lookup failed: ${userRes.status} ${reason}`)
   }
 
-  const user = await userRes.json<Partial<OsuUser>>()
+  const user = toRecord(await userRes.json())
+  if (!user) {
+    throw new Error("osu! user response malformed")
+  }
+
   if (typeof user.id !== "number" || typeof user.username !== "string") {
     throw new Error("osu! user response missing id or username")
   }
@@ -894,14 +942,14 @@ app.get("/api/auth/osu/preflight", async (c) => {
       }, 502)
     }
 
-    const tokenJson = await tokenRes.json<{ expires_in?: number; token_type?: string }>()
+    const tokenJson = toRecord(await tokenRes.json())
     return c.json({
       ok: true,
       status: tokenRes.status,
       osuClientId: clientId,
       osuRedirectUri: c.env.OSU_REDIRECT_URI?.trim() ?? null,
-      tokenType: tokenJson.token_type ?? null,
-      expiresIn: tokenJson.expires_in ?? null,
+      tokenType: tokenJson && typeof tokenJson.token_type === "string" ? tokenJson.token_type : null,
+      expiresIn: tokenJson && typeof tokenJson.expires_in === "number" ? tokenJson.expires_in : null,
     })
   } catch (error) {
     return c.json({

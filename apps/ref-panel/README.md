@@ -48,15 +48,39 @@ Do not run `bun run build` for normal local work. Build is for deploy verificati
 
 ## Cloudflare Pages Deploy
 
-Use these project settings in Cloudflare Pages:
+This repository is a monorepo. Configure the Pages project to build only `apps/ref-panel`.
+
+### Build configuration
 
 | Setting | Value |
 | --- | --- |
+| Framework preset | Vite (or None) |
+| Root directory | `apps/ref-panel` |
 | Build command | `npm run build` |
 | Build output directory | `dist` |
-| Root directory | repository root |
+| Node.js version | `>=20` |
 
-Cloudflare's React/Vite preset uses `npm run build` and `dist`. The `prebuild` script runs `bun install` so Cloudflare's npm build command still installs from `bun.lock` before TypeScript/Vite run.
+### Functions configuration
+
+- Keep the Functions directory as `functions` (it resolves to `apps/ref-panel/functions` because of the root directory setting).
+- In **Settings -> Functions -> Compatibility flags**, enable `nodejs_compat`.
+- Keep compatibility date aligned with `wrangler.jsonc`.
+
+### Environment configuration
+
+- Add all runtime secrets in Pages **Production** and **Preview** environments.
+- Required keys are listed in the Environment section below (`GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_SHEETS_TOURNAMENT_ID`, osu OAuth values, session/IRC values).
+- `GOOGLE_APPLICATION_CREDENTIALS` must be the full JSON string, not a file path.
+
+### Monorepo build watch paths (recommended)
+
+To avoid unnecessary deploys, include only paths that affect this app:
+
+- `apps/ref-panel/**`
+- `packages/**`
+- `package.json`
+- `bun.lock`
+- `turbo.json`
 
 ## Environment
 
