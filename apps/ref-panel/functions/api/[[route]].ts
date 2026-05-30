@@ -2378,14 +2378,15 @@ app.post("/api/match/:matchId/action", async (c) => {
 
   const { action, player, slot } = body
   const manualOrder = body.manualOrder === true
-  if (!action || !player || !slot) {
-    return c.json({ error: "action, player, and slot required" }, 400)
+  if (!action || !slot || (action !== "unpick" && !player)) {
+    return c.json({ error: action === "unpick" ? "action and slot required" : "action, player, and slot required" }, 400)
   }
-  if (!["pick", "ban", "protect"].includes(action)) {
+  if (!["pick", "ban", "protect", "unpick"].includes(action)) {
     return c.json({ error: "Invalid action" }, 400)
   }
 
-  const status = action === "pick" ? "picked" : action === "ban" ? "banned" : "protected"
+  const actionPlayer = player ?? ""
+  const status = action === "pick" ? "picked" : action === "ban" ? "banned" : action === "protect" ? "protected" : "available"
 
   // #TEST-MODE-START
   const actionCfgMap = await getConfigMap(c.env)
@@ -2397,14 +2398,14 @@ app.post("/api/match/:matchId/action", async (c) => {
   try {
     const match = await getMatchById(c.env, matchId)
     if (!match) return c.json({ error: "Match not found" }, 404)
-    const flowState = manualOrder ? undefined : await getMatchFlowState(c.env, matchId, Boolean(match.lobbyUrl))
+    const flowState = manualOrder && action !== "unpick" ? undefined : await getMatchFlowState(c.env, matchId, Boolean(match.lobbyUrl))
     const samePlayer = (a?: string, b?: string) => (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase()
 
     if (!manualOrder && flowState && action === "ban") {
       if (flowState.phase !== "ban") {
         return c.json({ error: `Ban phase is not open (${flowState.phase})` }, 409)
       }
-      if (!samePlayer(flowState.turnPlayer, player)) {
+      if (!samePlayer(flowState.turnPlayer, actionPlayer)) {
         return c.json({ error: `${flowState.turnPlayer ?? "Next player"} must ban next` }, 409)
       }
     }
@@ -2413,7 +2414,7 @@ app.post("/api/match/:matchId/action", async (c) => {
       if (flowState.phase !== "craft") {
         return c.json({ error: `Pick phase is not open (${flowState.phase})` }, 409)
       }
-      if (!samePlayer(flowState.turnPlayer, player)) {
+      if (!samePlayer(flowState.turnPlayer, actionPlayer)) {
         return c.json({ error: `${flowState.turnPlayer ?? "Next player"} must pick next` }, 409)
       }
     }
@@ -2430,33 +2431,43 @@ app.post("/api/match/:matchId/action", async (c) => {
     const pickedByIdx = idx("picked_by")
     const bannedByIdx = idx("banned_by")
     const statusIdx   = idx("status")
+    const scoreAIdx   = idx("score_a")
+    const scoreBIdx   = idx("score_b")
+    const winnerIdx   = idx("winner")
 
     const existingRowIdx = rows.findIndex(
       (r) => r[matchIdIdx]?.trim() === matchId && r[slotIdx]?.trim() === slot
     )
 
-    const beforeJson = existingRowIdx >= 0 ? JSON.stringify(rows[existingRowIdx]) : "{}"
+    const existingRow = existingRowIdx >= 0 ? rows[existingRowIdx] : undefined
+    const beforeJson = existingRow ? JSON.stringify(existingRow) : "{}"
+    const beforePickedBy = existingRow?.[pickedByIdx]?.trim() || undefined
 
     if (existingRowIdx >= 0) {
       const sheetRow = existingRowIdx + 2
       const writes: Promise<void>[] = []
-      if (action === "pick" && pickedByIdx >= 0) {
-        writes.push(writeSheetCell(c.env, `match_maps!${colLetter(pickedByIdx)}${sheetRow}`, player))
+      if (action === "unpick") {
+        if (pickedByIdx >= 0) writes.push(writeSheetCell(c.env, `match_maps!${colLetter(pickedByIdx)}${sheetRow}`, ""))
+        if (scoreAIdx >= 0) writes.push(writeSheetCell(c.env, `match_maps!${colLetter(scoreAIdx)}${sheetRow}`, ""))
+        if (scoreBIdx >= 0) writes.push(writeSheetCell(c.env, `match_maps!${colLetter(scoreBIdx)}${sheetRow}`, ""))
+        if (winnerIdx >= 0) writes.push(writeSheetCell(c.env, `match_maps!${colLetter(winnerIdx)}${sheetRow}`, ""))
+      } else if (action === "pick" && pickedByIdx >= 0) {
+        writes.push(writeSheetCell(c.env, `match_maps!${colLetter(pickedByIdx)}${sheetRow}`, actionPlayer))
       } else if (action === "ban" && bannedByIdx >= 0) {
-        writes.push(writeSheetCell(c.env, `match_maps!${colLetter(bannedByIdx)}${sheetRow}`, player))
+        writes.push(writeSheetCell(c.env, `match_maps!${colLetter(bannedByIdx)}${sheetRow}`, actionPlayer))
       }
       if (statusIdx >= 0) {
         writes.push(writeSheetCell(c.env, `match_maps!${colLetter(statusIdx)}${sheetRow}`, status))
       }
       await Promise.all(writes)
-    } else {
+    } else if (action !== "unpick") {
       const newRow = new Array(Math.max(norm.length, 9)).fill("")
       if (matchIdIdx >= 0) newRow[matchIdIdx] = matchId
       if (slotIdx >= 0)    newRow[slotIdx] = slot
       if (mapIdIdx >= 0)   newRow[mapIdIdx] = slot
       if (statusIdx >= 0)  newRow[statusIdx] = status
-      if (action === "pick" && pickedByIdx >= 0)  newRow[pickedByIdx] = player
-      if (action === "ban" && bannedByIdx >= 0)    newRow[bannedByIdx] = player
+      if (action === "pick" && pickedByIdx >= 0)  newRow[pickedByIdx] = actionPlayer
+      if (action === "ban" && bannedByIdx >= 0)    newRow[bannedByIdx] = actionPlayer
       await appendSheetRow(c.env, "match_maps", newRow)
     }
 
@@ -2467,7 +2478,7 @@ app.post("/api/match/:matchId/action", async (c) => {
         firstValue(r, ["match_id"]) === matchId &&
         firstValue(r, ["status"]).toLowerCase() === "banned"
       ).length + 1
-      const firstBanner = flowState.firstBanner ?? player
+      const firstBanner = flowState.firstBanner ?? actionPlayer
       const secondBanner = opponentOf(firstBanner, match.playerA, match.playerB)
       const banOrder = orderedPlayersFromPattern(actionCfgMap.get("ban order") ?? DEFAULT_BAN_ORDER, firstBanner, secondBanner)
       if (completedBans < banOrder.length) {
@@ -2489,12 +2500,19 @@ app.post("/api/match/:matchId/action", async (c) => {
       nextFlowState = await writeMatchFlowState(c.env, {
         ...flowState,
         phase: "play",
-        turnPlayer: player,
+        turnPlayer: actionPlayer,
         currentSlot: slot,
+      })
+    } else if (flowState && action === "unpick" && flowState.currentSlot === slot) {
+      nextFlowState = await writeMatchFlowState(c.env, {
+        ...flowState,
+        phase: "craft",
+        turnPlayer: beforePickedBy ?? flowState.turnPlayer,
+        currentSlot: undefined,
       })
     }
 
-    const afterState = { matchId, slot, action, player, status, manualOrder }
+    const afterState = { matchId, slot, action, player: player ?? beforePickedBy, status, manualOrder }
     await appendAuditLog(
       c.env,
       sessionUser?.username ?? "unknown",

@@ -809,7 +809,9 @@ export function MatchPanel({ match, onBack, isDemo = false, testMode = false }: 
         playerA={match.playerA}
         playerB={match.playerB}
         allowedActions={
-          selectedMap?.status !== "available"
+          selectedMap?.status === "picked"
+            ? ["unpick"]
+            : selectedMap?.status !== "available"
             ? []
             : manualMapActions
               ? undefined
@@ -821,7 +823,9 @@ export function MatchPanel({ match, onBack, isDemo = false, testMode = false }: 
         }
         expectedPlayer={selectedMap?.status === "available" && !manualMapActions ? flowState?.turnPlayer : undefined}
         helperText={
-          selectedMap?.status !== "available"
+          selectedMap?.status === "picked"
+            ? "Remove this pick and return the map to available."
+            : selectedMap?.status !== "available"
             ? "This map is already locked."
             : manualMapActions
               ? "Manual order is on. Either player can pick, ban, or protect."
@@ -835,11 +839,15 @@ export function MatchPanel({ match, onBack, isDemo = false, testMode = false }: 
         onAction={(action, player) => {
           const map = selectedMap
           if (!map) return
+          if (action !== "unpick" && !player) return
           setSelectedMap(null)
 
           // optimistic update
           setLiveMappool((prev) => prev ? prev.map((m) => {
             if (m.slot !== map.slot) return m
+            if (action === "unpick") {
+              return { ...m, status: "available", pickedBy: undefined, winner: undefined }
+            }
             return {
               ...m,
               status: action === "pick" ? "picked" : action === "ban" ? "banned" : "protected",
@@ -863,7 +871,12 @@ export function MatchPanel({ match, onBack, isDemo = false, testMode = false }: 
             }
             const data = await res.json() as { state?: MatchFlowState }
             if (data.state) setFlowState(data.state)
-            else if (!manualMapActions) advanceLocalAfterMapAction(action, player, map.slot)
+            else if (action === "unpick") {
+              setFlowState((prev) => prev?.currentSlot === map.slot
+                ? { ...prev, phase: "craft", turnPlayer: map.pickedBy ?? prev.turnPlayer, currentSlot: undefined, updatedAt: new Date().toISOString() }
+                : prev)
+            }
+            else if (!manualMapActions && player) advanceLocalAfterMapAction(action, player, map.slot)
           })
 
           if (action === "pick") {

@@ -195,7 +195,7 @@ Implemented:
 | `PUT /api/match/:matchId/inventory` | Manually updates one player's inventory; body: `player`, ingredient counts |
 | `GET /api/match/:matchId/state` | Loads persisted match flow state, defaulting to `lobby` or `roll` based on lobby URL |
 | `POST /api/match/:matchId/state` | Advances roll/order/home-mod flow state |
-| `POST /api/match/:matchId/action` | Writes map `pick`, `ban`, or `protect`; strict flow order unless `manualOrder: true` |
+| `POST /api/match/:matchId/action` | Writes map `pick`, `ban`, `protect`, or `unpick`; strict flow order unless `manualOrder: true` |
 | `POST /api/match/:matchId/score` | Writes map score/winner, marks map completed, awards ingredient, advances flow |
 | `POST /api/match/:matchId/recipe` | Validates recipe timing/cost, deducts inventory, writes item event |
 | `POST /api/match/:matchId/post-result` | Writes final match winner/score and completes flow |
@@ -230,6 +230,8 @@ Implemented:
 ```
 
 When `manualOrder` is omitted or `false`, the endpoint enforces the current match-flow phase and expected player. When `manualOrder` is `true`, it preserves the old free-action behavior: either player may pick, ban, or protect any available map, and the endpoint does not advance `match_state`.
+
+Use `"action": "unpick"` with a picked `slot` to clear `picked_by`, score fields, winner, and return the map to `available`. `unpick` does not require `player`.
 
 Most mutation endpoints return `{ ok: true, simulated: true }` without writing Sheets when test mode is enabled in the `config` tab.
 

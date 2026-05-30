@@ -159,6 +159,7 @@ export function PlayerColumn({
 }: Props) {
   const winsNeeded = Math.ceil(bestOf / 2)
   const isFinished = matchStatus === "completed" || matchStatus === "forfeit"
+  const canPostResult = !isDemo && hasLobby && (isFinished || postResultReady || testResultUnlocked)
   const [editingPlayer, setEditingPlayer] = useState<"a" | "b" | null>(null)
   const [confirmAction, setConfirmAction] = useState<LobbyConfirm | null>(null)
   const [joinOpen, setJoinOpen] = useState(false)
@@ -259,16 +260,24 @@ export function PlayerColumn({
           {isDemo && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-700">demo</span>}
         </div>
         {/* Setup */}
-        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || hasLobby} onClick={() => setConfirmAction("create")}>Create lobby</Button>
-        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || hasLobby} onClick={() => setJoinOpen(true)}>Join existing</Button>
-        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || hasLobby} onClick={() => setConfirmAction("reminder")}>Match reminder</Button>
+        {!hasLobby && (
+          <>
+            <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo} onClick={() => setConfirmAction("create")}>Create lobby</Button>
+            <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo} onClick={() => setJoinOpen(true)}>Join existing</Button>
+          </>
+        )}
+        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo} onClick={() => setConfirmAction("reminder")}>Match reminder</Button>
         <Separator className="my-1" />
         {/* Result */}
-        <Button size="sm" variant="outline" className="w-full text-xs" disabled={isDemo || (!isFinished && !postResultReady && !testResultUnlocked)} onClick={() => setConfirmAction("result")}>Post match result</Button>
+        <Button size="sm" variant="outline" className="w-full text-xs" disabled={!canPostResult} onClick={() => setConfirmAction("result")}>Post match result</Button>
         <Separator className="my-1" />
         {/* Danger */}
-        <Button size="sm" variant="outline" className="w-full text-xs border-destructive/40 text-destructive/80 hover:border-destructive hover:text-destructive hover:bg-destructive/5" disabled={isDemo || isFinished} onClick={() => setForfeitOpen(true)}>Set forfeit</Button>
-        <Button size="sm" variant="destructive" className="w-full text-xs" disabled={isDemo || !hasLobby} onClick={() => setConfirmAction("close")}>Close lobby</Button>
+        {!isFinished && (
+          <Button size="sm" variant="outline" className="w-full text-xs border-destructive/40 text-destructive/80 hover:border-destructive hover:text-destructive hover:bg-destructive/5" disabled={isDemo} onClick={() => setForfeitOpen(true)}>Set forfeit</Button>
+        )}
+        {hasLobby && (
+          <Button size="sm" variant="destructive" className="w-full text-xs" disabled={isDemo} onClick={() => setConfirmAction("close")}>Close lobby</Button>
+        )}
       </div>
 
       {/* Confirmation dialogs */}
