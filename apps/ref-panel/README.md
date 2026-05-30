@@ -56,13 +56,13 @@ This repository is a monorepo. Configure the Pages project to build only `apps/r
 | --- | --- |
 | Framework preset | Vite (or None) |
 | Root directory | `apps/ref-panel` |
-| Install command | leave blank for automatic install, or `bun install` |
+| Install command | `bun install --frozen-lockfile` |
 | Build command | `bun run build` |
 | Build output directory | `dist` |
 | Node.js version | `>=20` |
 | Bun version | `1.3.5` |
 
-Do not set the root directory to the repository root for this Pages project. If the build log says `Executing user command: bun run build` followed by `turbo: command not found`, Cloudflare is building from the monorepo root without installing dependencies. Fix the Pages settings above and remove `SKIP_DEPENDENCY_INSTALL` unless you provide an explicit install command.
+Do not set the root directory to the repository root for this Pages project. If the build log says `Executing user command: bun run build` followed by `turbo: command not found`, Cloudflare is building from the monorepo root without installing dependencies. If it says `tsc: command not found`, dependencies were not installed before the app build. Fix the Pages settings above and remove `SKIP_DEPENDENCY_INSTALL`.
 
 ### Functions configuration
 
